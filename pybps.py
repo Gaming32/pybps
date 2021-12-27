@@ -113,10 +113,10 @@ def dis(
             print('   TargetRead', length, reader.read(length))
         elif command == 2:
             data = _decode_number(reader)
-            print('   SourceCopy', (-1 if (data & 1) else 1) * (data >> 1))
+            print('   SourceCopy', length, (-1 if (data & 1) else 1) * (data >> 1))
         elif command == 3:
             data = _decode_number(reader)
-            print('   TargetCopy', (-1 if (data & 1) else 1) * (data >> 1))
+            print('   TargetCopy', length, (-1 if (data & 1) else 1) * (data >> 1))
         else:
             raise InvalidFormatError(f'Invalid command {command} (expected 0, 1, 2, or 3)')
 
@@ -165,13 +165,18 @@ def _patch(
         elif command == 3:
             data = _decode_number(state.patch)
             target_rel.seek((-1 if (data & 1) else 1) * (data >> 1), io.SEEK_CUR)
-            target_rel_offset = target_rel.tell() - target_rel_base
+            # target_rel_offset = target_rel.tell() - target_rel_base
             # Data can be buffered, instead of copied byte by byte
-            if state.target.position - 8 > target_rel_offset:
-                _buffered_copy(target_rel, state.target, length, min(state.target.position - target_rel_offset, _BUFFER_SIZE))
-            else:
-                for _ in range(length):
-                    state.target.write(target_rel.read(1))
+            # if state.target.position - 8 > target_rel_offset:
+            #     while length > 0:
+            #         state.target.buffer.flush()
+            #         buffer = target_rel.read(min(length, _BUFFER_SIZE))
+            #         state.target.write(buffer)
+            #         length -= _BUFFER_SIZE
+            # else:
+            for _ in range(length):
+                state.target.buffer.flush()
+                state.target.write(target_rel.read(1))
         else:
             raise InvalidFormatError(f'Invalid command {command} (expected 0, 1, 2, or 3)')
         print(state.target.position)
@@ -234,7 +239,7 @@ def patch(
         patch.seek(cur, io.SEEK_SET)
 
     if isinstance(target, _MustBeOpened):
-        target_abs = open(target, 'wb', buffering=0)
+        target_abs = open(target, 'wb')
         target_rel = open(target, 'rb')
     else:
         raise ValueError('target must be file path')
@@ -262,22 +267,26 @@ if __name__ == '__main__':
     #     'pypatch.bps',
     #     'result.py'
     # )
-    # patch(
-    #     r"C:\Users\josia\MEGA\Projects\Downloadables\Super Mario 64.z64",
-    #     r"C:\Users\josia\MEGA\Projects\SM64 Hacks\XMas mini\XMas.bps",
-    #     'result.z64'
-    # )
+    patch(
+        r"C:\Users\josia\MEGA\Projects\Downloadables\Super Mario 64.z64",
+        r"C:\Users\josia\MEGA\Projects\SM64 Hacks\XMas mini\XMas.bps",
+        'result.z64'
+    )
+    exit()
     import sys
     if len(sys.argv) < 2 or sys.argv[1] not in ('patch', 'dis'):
         print('Usage: pybps.py <patch|dis> ...')
+        exit(1)
     if sys.argv[1] == 'patch':
         if len(sys.argv) < 5:
             print('Usage: pybps.py patch <source> <patch> <target>')
+            exit(1)
         patch(sys.argv[2], sys.argv[3], sys.argv[4])
     elif sys.argv[1] == 'dis':
         if len(sys.argv) < 3:
             print('Usage: pybps.py patch <patch>')
-        with open(sys.argv[1], 'rb') as fp:
+            exit(1)
+        with open(sys.argv[2], 'rb') as fp:
             size = fp.seek(0, io.SEEK_END)
             fp.seek(0, io.SEEK_SET)
             dis(fp, size)
